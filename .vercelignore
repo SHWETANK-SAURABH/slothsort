@@ -1,0 +1,5 @@
+# Vercel serves only the static landing page in site/.
+# The Streamlit app is meant to run locally and must not be detected as a Python function.
+/*
+!site
+!vercel.json

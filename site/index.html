@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SlothSort — local AI file organizer</title>
+<meta name="description" content="SlothSort is a local-first AI file organization agent. It suggests names and folders with an open-weight model running on your machine, and nothing moves until you approve.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%238A6A4F'/%3E%3Cellipse cx='32' cy='35' rx='21' ry='18' fill='%23E9DCC6'/%3E%3Cellipse cx='23' cy='33' rx='7' ry='5' fill='%235A4636'/%3E%3Cellipse cx='41' cy='33' rx='7' ry='5' fill='%235A4636'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #FBFAF6; --surface: #FFFFFF; --soft: #F1EEE6; --text: #2E2A25; --muted: #6B645B;
+  --line: #E3DED3; --moss: #5B7F5A; --moss-ink: #FFFFFF; --bark: #8A6A4F; --ok: #4E7A4D; --bad: #B8483D;
+  --code: #F4F1EA;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171614; --surface: #1F1D1A; --soft: #26231F; --text: #ECE7DE; --muted: #A9A196;
+    --line: #34302A; --moss: #86AE84; --moss-ink: #12180F; --bark: #C29C79; --ok: #8DBB8B; --bad: #E58A80;
+    --code: #24211D;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--moss); }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header.top { border-bottom: 1px solid var(--line); }
+header.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; color: var(--text); text-decoration: none; }
+nav a { color: var(--muted); text-decoration: none; margin-left: 18px; font-size: .95rem; }
+nav a:hover { color: var(--text); }
+@media (max-width: 640px) { nav a:not(.gh) { display: none; } }
+
+.hero { padding: 72px 0 48px; }
+.hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.1; letter-spacing: -.025em; margin: 0 0 16px; max-width: 18ch; }
+.hero p.lead { font-size: 1.15rem; color: var(--muted); max-width: 60ch; margin: 0 0 28px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { display: inline-block; padding: 11px 18px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid var(--line); color: var(--text); background: var(--surface); }
+.btn.primary { background: var(--moss); color: var(--moss-ink); border-color: var(--moss); }
+.note { margin-top: 18px; font-size: .9rem; color: var(--muted); }
+
+.compare { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; margin-top: 44px; }
+@media (max-width: 760px) { .compare { grid-template-columns: 1fr; } .compare .arrow { transform: rotate(90deg); justify-self: center; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; min-width: 0; }
+.panel h3 { margin: 0 0 10px; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.panel ul { list-style: none; margin: 0; padding: 0; font: 13.5px/1.9 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.panel li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel li b { color: var(--moss); font-weight: 600; }
+.arrow { font-size: 1.6rem; color: var(--muted); }
+.caption { font-size: .85rem; color: var(--muted); margin-top: 10px; }
+
+section { padding: 56px 0; border-top: 1px solid var(--line); }
+section h2 { font-size: 1.7rem; letter-spacing: -.015em; margin: 0 0 8px; }
+section p.sub { color: var(--muted); margin: 0 0 28px; max-width: 65ch; }
+
+.steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; counter-reset: s; }
+@media (max-width: 900px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .steps { grid-template-columns: 1fr; } }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.step::before { counter-increment: s; content: counter(s); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--soft); color: var(--moss); font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+.step h3 { margin: 0 0 4px; font-size: 1rem; }
+.step p { margin: 0; font-size: .92rem; color: var(--muted); }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+.checks { list-style: none; padding: 0; margin: 0; }
+.checks li { padding: 9px 0 9px 28px; position: relative; border-bottom: 1px solid var(--line); }
+.checks li:last-child { border-bottom: 0; }
+.checks li::before { content: "✓"; position: absolute; left: 4px; color: var(--ok); font-weight: 700; }
+.checks.no li::before { content: "–"; color: var(--muted); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--soft); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+pre { background: var(--code); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; font: 14px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 0; }
+pre .c { color: var(--muted); }
+.callout { background: var(--soft); border-left: 3px solid var(--moss); border-radius: 8px; padding: 14px 16px; margin-top: 20px; font-size: .95rem; }
+
+footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--muted); font-size: .9rem; }
+footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="32" r="30" fill="#8A6A4F"/>
+        <ellipse cx="32" cy="35" rx="21" ry="18" fill="#E9DCC6"/>
+        <ellipse cx="23" cy="33" rx="7" ry="5" fill="#5A4636" transform="rotate(-18 23 33)"/>
+        <ellipse cx="41" cy="33" rx="7" ry="5" fill="#5A4636" transform="rotate(18 41 33)"/>
+        <circle cx="24" cy="33" r="2" fill="#F7F3EA"/><circle cx="40" cy="33" r="2" fill="#F7F3EA"/>
+        <ellipse cx="32" cy="40" rx="3" ry="2" fill="#3E2F24"/>
+        <path d="M27 45 Q32 49 37 45" stroke="#3E2F24" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      SlothSort
+    </a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#safety">Safety</a>
+      <a href="#results">Results</a>
+      <a href="#start">Get started</a>
+      <a class="gh" href="https://github.com/SHWETANK-SAURABH/slothsort">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <h1>Stop organizing files by hand.</h1>
+    <p class="lead">SlothSort is a local-first AI agent that tidies messy folders. An open-weight model running on
+      <em>your</em> computer suggests clear names and folders. You review every change, nothing is overwritten,
+      and every move can be undone.</p>
+    <div class="cta">
+      <a class="btn primary" href="#start">Run it locally</a>
+      <a class="btn" href="https://github.com/SHWETANK-SAURABH/slothsort">View source on GitHub</a>
+    </div>
+    <p class="note">SlothSort runs on your machine, not on this website. This page is only the project overview.</p>
+
+    <div class="compare">
+      <div class="panel">
+        <h3>Before</h3>
+        <ul>
+          <li>doc_001.pdf</li>
+          <li>invoice_final_2.pdf</li>
+          <li>hw3.docx</li>
+          <li>notes_final_v3.txt</li>
+          <li>Downloads/download (3).pdf</li>
+        </ul>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="panel">
+        <h3>After you approve</h3>
+        <ul>
+          <li><b>Invoices/</b>Greenfield_Power_Electricity_Bill_October_2026.pdf</li>
+          <li><b>Invoices/</b>Lumen_Labs_Redesign_Invoice_1042.pdf</li>
+          <li><b>Assignments/</b>CS101_Assignment_3_Sorting_Algorithms.docx</li>
+          <li><b>Notes/</b>Project_Kestrel_Weekly_Meeting_Notes.txt</li>
+          <li><b>Receipts/</b>Pinecone_Books_Order_Receipt_PB88213.pdf</li>
+        </ul>
+      </div>
+    </div>
+    <p class="caption">Real suggestions from <code>gemma3:4b</code> on the bundled synthetic demo set. All names and companies are fictional.</p>
+  </div>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p class="sub">Five steps, and none of them can be skipped. The model only ever returns text. It never touches your files.</p>
+      <div class="steps">
+        <div class="step"><h3>Select a folder</h3><p>You pick one folder. Whole drives and home folders are refused.</p></div>
+        <div class="step"><h3>Scan</h3><p>Read-only. Short excerpts from PDF, DOCX, TXT, MD and CSV files; image metadata; SHA-256 duplicate check.</p></div>
+        <div class="step"><h3>Review the AI plan</h3><p>The local model proposes a category and a name. Python re-validates everything, and you can edit any row.</p></div>
+        <div class="step"><h3>Approve</h3><p>See the exact from → to list and confirm it. If the folder changed since review, you review again.</p></div>
+        <div class="step"><h3>Results &amp; undo</h3><p>Every move goes into a persistent journal. Undo one file or the whole batch.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="safety">
+    <div class="wrap">
+      <h2>Built to be trusted with your files</h2>
+      <p class="sub">The model's output is treated as untrusted input. These rules are enforced by plain, deterministic code and covered by automated tests.</p>
+      <div class="grid2">
+        <div class="panel">
+          <h3>Guaranteed by code</h3>
+          <ul class="checks">
+            <li>Scanning and planning never modify the disk</li>
+            <li>Only an intact, user-approved plan can run. Edited or forged plans are refused</li>
+            <li>Every path stays inside the folder you chose. Symlinks and junctions are never followed</li>
+            <li>Existing files are never overwritten, including during undo</li>
+            <li>Files changed after review (size, time or hash) are not moved</li>
+            <li>Nothing is deleted, not even duplicates</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Honest about limits</h3>
+          <ul class="checks no">
+            <li>No OCR or image understanding. Images are named from filename and metadata only</li>
+            <li>Model confidence is self-reported and not calibrated</li>
+            <li>A grounding check flags invented years and IDs, but not every invented word</li>
+            <li>Undo refuses, with a reason, if the file was edited or its old spot is now taken</li>
+            <li>Not yet tested with the network physically disconnected</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout"><strong>Privacy:</strong> file contents go only to the Ollama endpoint you configure, which is
+        <code>localhost</code> by default. There are no API keys and no telemetry, and Streamlit's usage statistics are switched off.</div>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="wrap">
+      <h2>Measured, not promised</h2>
+      <p class="sub">27 supported synthetic files, each hand-labelled with one expected category. Two runs with <code>gemma3:4b</code> on a Windows 11 laptop.
+        The default <code>qwen2.5:3b</code> has not been evaluated yet. 27 files is far too few to say anything about general accuracy.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Metric</th><th>Run 1</th><th>Run 2</th></tr></thead>
+          <tbody>
+            <tr><td>Local AI category accuracy</td><td class="num">25/27 (92.6%)</td><td class="num">24/27 (88.9%)</td></tr>
+            <tr><td>Filename-only baseline</td><td class="num">17/27 (63.0%)</td><td class="num">17/27 (63.0%)</td></tr>
+            <tr><td>Malformed model responses</td><td class="num">0 of 7 calls</td><td class="num">0 of 7 calls</td></tr>
+            <tr><td>Planning time</td><td class="num">≈3.0 s / file</td><td class="num">≈2.2 s / file</td></tr>
+            <tr><td>Approved moves completed</td><td class="num">27/27</td><td class="num">27/27</td></tr>
+            <tr><td>Moves undone successfully</td><td class="num">27/27</td><td class="num">27/27</td></tr>
+            <tr><td>Unsafe-operation probes blocked</td><td class="num">12/12</td><td class="num">12/12</td></tr>
+            <tr><td>Exact duplicates found</td><td class="num">2 groups</td><td class="num">2 groups</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="caption">The demo set includes a prompt-injection file that tells the model to move it into <code>system32</code>. The model did not follow it, and the validator would have blocked that path anyway.
+        Full method and caveats are in the <a href="https://github.com/SHWETANK-SAURABH/slothsort#evaluation">README</a>.</p>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <h2>Get started</h2>
+      <p class="sub">You need Python 3.11+ and <a href="https://ollama.com/download">Ollama</a>. Setup needs the internet once, to install packages and download the model.</p>
+<pre><span class="c"># 1. Get the code</span>
+git clone https://github.com/SHWETANK-SAURABH/slothsort.git
+cd slothsort
+python -m venv .venv
+<span class="c"># Windows: .venv\Scripts\activate   macOS/Linux: source .venv/bin/activate</span>
+pip install -r requirements.txt
+
+<span class="c"># 2. Download a local model (about 1.9 GB)</span>
+ollama pull qwen2.5:3b
+
+<span class="c"># 3. Optional: create the 29-file synthetic demo folder</span>
+python demo/generate_demo.py
+
+<span class="c"># 4. Launch, then open http://localhost:8501</span>
+streamlit run app.py</pre>
+      <div class="callout">Why isn't there a hosted version? SlothSort organizes files on the computer it runs on, using a model on that same
+        computer. A hosted copy would see the server's disk instead of yours, or it would need you to upload your files, which is exactly what SlothSort avoids.</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>SlothSort · local, private, reversible.</span>
+    <span>Python · Streamlit · Ollama · PyMuPDF · Pydantic · SQLite</span>
+  </div>
+</footer>
+
+</body>
+</html>

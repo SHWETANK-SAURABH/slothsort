@@ -28,6 +28,10 @@ bills, receipts and coursework.
 
 Suggestions depend on the model and the evidence. They are proposals for you to review, not guarantees.
 
+> **Project page:** `site/index.html` is a static overview that can be hosted on Vercel (`vercel.json` +
+> `.vercelignore` deploy only that folder). The app itself is meant to run locally: a hosted copy would see the
+> server's disk instead of yours and couldn't reach your local Ollama.
+
 ## Features
 
 - **Real local AI**: classification and naming by an open-weight model through Ollama. You pick the model.
