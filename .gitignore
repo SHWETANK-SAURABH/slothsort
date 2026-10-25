@@ -24,3 +24,4 @@ demo/.eval_workspace/
 .DS_Store
 Thumbs.db
 .env
+demo/eval_results.json
