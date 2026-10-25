@@ -1,0 +1,12 @@
+[browser]
+# No telemetry: Streamlit's anonymous usage statistics are disabled.
+gatherUsageStats = false
+
+[server]
+# Local-only by default. Change only if you understand the risk of exposing your files.
+address = "localhost"
+headless = true
+
+[theme]
+# Only the accent is set, so the built-in light/dark switch keeps working.
+primaryColor = "#5B7F5A"

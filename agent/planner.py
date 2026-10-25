@@ -140,6 +140,7 @@ def tidy_stem(name: str) -> str:
     stem, dot, ext = name.rpartition(".") if "." in name else (name, "", "")
     words = [w for w in re.split(r"[_\s-]+", stem) if w]
     kept = [w for w in words if w.lower() not in _EXT_WORDS] or words
+    kept = [w if any(c.isupper() for c in w) else w.capitalize() for w in kept]  # keep acronyms
     return "_".join(kept) + (dot + ext if dot else "")
 
 
