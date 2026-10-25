@@ -1,0 +1,26 @@
+# Local build prompt (not part of the project)
+prompt/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# SlothSort runtime data
+.slothsort/
+*.sqlite3
+*.db
+
+# Generated demo workspace
+demo/sample_files/
+demo/.eval_workspace/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.env
