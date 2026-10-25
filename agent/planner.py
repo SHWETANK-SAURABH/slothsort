@@ -9,6 +9,7 @@ rule-based classifier and are flagged for human review.
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -20,7 +21,7 @@ from pydantic import ValidationError
 
 from agent.prompts import SYSTEM_PROMPT, build_retry_prompt, build_user_prompt
 from agent.schemas import BatchResponse, ModelSuggestion, PlanItem, response_json_schema
-from config import Settings
+from config import ALLOWED_CATEGORIES, Settings
 from core.classifier import classify_heuristic
 from core.duplicate_detector import hash_record
 from core.path_validator import (
@@ -122,6 +123,46 @@ def _describe(record: FileRecord, file_id: str, excerpt_chars: int) -> dict:
     if record.excerpt:
         info["text_excerpt"] = record.excerpt[:excerpt_chars]
     return info
+
+
+_TOKEN = re.compile(r"[A-Za-z]+|\d+")
+_EXT_WORDS = {"pdf", "txt", "md", "csv", "png", "jpg", "jpeg", "docx", "doc", "file"}
+# Words a name may use without textual evidence: categories and plain descriptors.
+_GENERIC_WORDS = {c.lower() for c in ALLOWED_CATEGORIES} | {
+    "image", "photo", "picture", "screenshot", "screen", "shot", "scan", "scanned", "document", "untitled",
+    "unknown", "unidentified", "unnamed", "copy", "the", "of", "and", "a", "an", "for", "with", "no", "text",
+    "invoice", "receipt", "assignment", "note", "spreadsheet", "data", "pages", "page", "blank", "empty",
+}  # fmt: skip
+
+
+def tidy_stem(name: str) -> str:
+    """Drop redundant extension words the model likes to append (``Report_PDF.pdf``)."""
+    stem, dot, ext = name.rpartition(".") if "." in name else (name, "", "")
+    words = [w for w in re.split(r"[_\s-]+", stem) if w]
+    kept = [w for w in words if w.lower() not in _EXT_WORDS] or words
+    return "_".join(kept) + (dot + ext if dot else "")
+
+
+def grounding_issues(record: FileRecord, filename: str) -> list[str]:
+    """Deterministic check that a proposed name does not invent facts.
+
+    Numbers (years, IDs, amounts) must literally appear in the evidence. For files
+    with no extracted text, every non-generic word must appear in the filename or
+    metadata, because the model cannot see image or scan contents.
+    """
+    evidence = " ".join([record.name, record.excerpt, json.dumps(record.metadata, default=str)]).lower()
+    evidence_nums = set(re.findall(r"\d+", evidence))
+    evidence_words = set(re.findall(r"[a-z]+", evidence))
+    stem = filename.rsplit(".", 1)[0]
+    issues: list[str] = []
+    for tok in _TOKEN.findall(stem):
+        low = tok.lower()
+        if tok.isdigit():
+            if low not in evidence_nums and low.lstrip("0") not in {n.lstrip("0") for n in evidence_nums}:
+                issues.append(f"'{tok}' not found in the file")
+        elif not record.excerpt and low not in evidence_words and low not in _GENERIC_WORDS and len(low) > 2:
+            issues.append(f"'{tok}' cannot be verified (no readable text)")
+    return issues[:3]
 
 
 def parse_batch_response(raw: str, expected_ids: set[str]) -> dict[str, ModelSuggestion]:
@@ -247,9 +288,12 @@ class Planner:
         if suggestion is not None:
             try:
                 category = normalize_category(suggestion.category)
-                filename = validate_filename(suggestion.suggested_filename, record.ext, self.settings.max_filename_len)
+                filename = validate_filename(
+                    tidy_stem(suggestion.suggested_filename), record.ext, self.settings.max_filename_len
+                )
                 reason = " ".join(suggestion.reason.split())[:240] or "No reason given by the model."
-                needs_review = suggestion.confidence < self.settings.review_threshold
+                ungrounded = grounding_issues(record, filename)
+                needs_review = suggestion.confidence < self.settings.review_threshold or bool(ungrounded)
                 return PlanItem(
                     **base,
                     category=category,
@@ -258,6 +302,7 @@ class Planner:
                     confidence=suggestion.confidence,
                     origin="ai",
                     needs_review=needs_review,
+                    validation_message=("Check name: " + "; ".join(ungrounded)) if ungrounded else "",
                 )
             except PathValidationError as exc:
                 problems.append(f"AI suggestion rejected: {exc}")

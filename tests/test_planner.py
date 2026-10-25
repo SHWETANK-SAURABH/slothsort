@@ -144,3 +144,24 @@ def test_user_edit_revalidated(root, settings):
     apply_edit(item, root, "Notes", "My Notes")
     finalize_destinations([item], root)
     assert item.validation_status == "valid" and item.destination_rel == "Notes/My_Notes.txt"
+
+
+def test_invented_numbers_flagged_for_review(root, settings):
+    recs = _records(root, settings, {"rcpt.txt": "Maple Market receipt 2026-09-21 total 8.45"})
+    client = FakeClient([{"items": [_item("f1", "Receipts", "Maple_Market_Receipt_September_2021")]}])
+    item = Planner(settings, client).plan(recs, root).items[0]
+    assert item.needs_review and "2021" in item.validation_message
+    assert item.validation_status == "valid"  # still selectable after a human check
+
+
+def test_grounded_name_not_flagged(root, settings):
+    recs = _records(root, settings, {"rcpt.txt": "Maple Market receipt 2026-09-21"})
+    client = FakeClient([{"items": [_item("f1", "Receipts", "Maple_Market_Receipt_2026")]}])
+    item = Planner(settings, client).plan(recs, root).items[0]
+    assert not item.needs_review and item.validation_message == ""
+
+
+def test_redundant_extension_words_removed(root, settings):
+    recs = _records(root, settings, {"a.txt": "notes"})
+    client = FakeClient([{"items": [_item("f1", "Notes", "Project_Notes_TXT.txt")]}])
+    assert Planner(settings, client).plan(recs, root).items[0].proposed_filename == "Project_Notes.txt"
